@@ -9,32 +9,27 @@ import {
   updateBookShelfPosition,
   addBookFromGoogleVolume,
   deleteBook,
+  addDecorItem,
 } from "@/lib/firebase";
+
 const ROOM_THEMES = {
   cozy: {
     id: "cozy",
     label: "Cozy Bookstore",
-    
-    // NEW: real background image
     backgroundImage: "/themes/cozy-bookstore.png",
-
-    // keep your bookcase + shelf styling
     bookcaseBackground:
-      "linear-gradient(180deg, #1f2937 0, #111827 35%, #020617 100%)",
+      "linear-gradient(180deg, #3b2412 0%, #2a1609 40%, #1c0f06 100%)",
     shelfBackground:
-      "linear-gradient(180deg, #273549 0, #111827 45%, #020617 100%)",
-    bookcaseBorder: "#111827",
-    shelfBorder: "#020617",
+      "linear-gradient(180deg, #5b3a1a 0, #3f2613 55%, #2a1609 100%)",
+    bookcaseBorder: "#2a1609",
+    shelfBorder: "#3b2412",
     accent: "#f97316",
   },
 
   fantasy: {
     id: "fantasy",
     label: "Arcane Library",
-
-    // NEW
     backgroundImage: "/themes/fantasy-library.jpg",
-
     bookcaseBackground:
       "linear-gradient(180deg, #020617 0, #020617 30%, #020617 100%)",
     shelfBackground:
@@ -47,10 +42,7 @@ const ROOM_THEMES = {
   neon: {
     id: "neon",
     label: "Sci-Fi Archive",
-
-    // NEW
     backgroundImage: "/themes/scifi-room.jpg",
-
     bookcaseBackground:
       "linear-gradient(180deg, #020617 0, #020617 40%, #020617 100%)",
     shelfBackground:
@@ -61,19 +53,17 @@ const ROOM_THEMES = {
   },
 };
 
-
 const SHELVES = [0, 1, 2];
+const MAX_TRAY_ITEMS = 18;
 
-// Book spine component
-function BookSpine({ book, draggingBookId, onDragStart, onDragEnd }) {
-  const isDragging = draggingBookId === book.id;
+// ---------- BOOK SPINE ----------
+
+function BookSpine({ book, draggingItemId, onDragStart, onDragEnd }) {
+  const isDragging = draggingItemId === book.id;
   const label = book.label || book.title || "Book";
-
   const hasCover = !!book.thumbnailUrl;
- // More realistic book proportions
-const labelLen = label.length;
+  const labelLen = label.length;
 
-  // Thickness based on page count when available
   let widthRem;
   if (book.pageCount && book.pageCount > 0) {
     const minPages = 120;
@@ -82,27 +72,22 @@ const labelLen = label.length;
       Math.max(book.pageCount, minPages),
       maxPages
     );
-    const t = (clampedPages - minPages) / (maxPages - minPages); // 0–1
-// Width (thickness): 0.9–2rem depending on title length
-const minWidth = 0.9;
-const maxWidth = 2.0;
-const widthRem =
-  minWidth +
-  (Math.min(labelLen, 40) / 40) * (maxWidth - minWidth);
+    const t = (clampedPages - minPages) / (maxPages - minPages);
+    const minWidth = 1.2;
+    const maxWidth = 2.6;
+    widthRem = minWidth + t * (maxWidth - minWidth);
   } else {
-    // Fallback: label length
-    const minWidth = 0.7;
-    const maxWidth = 1.4;
+    const minWidth = 1.0;
+    const maxWidth = 2.0;
     widthRem =
       minWidth + (Math.min(labelLen, 28) / 28) * (maxWidth - minWidth);
   }
 
-// Height: 5.8–9rem depending on title length
-const minHeight = 5.8;
-const maxHeight = 9;
-const heightRem =
-  minHeight +
-  (Math.min(labelLen, 40) / 40) * (maxHeight - minHeight);
+  const minHeight = 5.8;
+  const maxHeight = 9;
+  const heightRem =
+    minHeight +
+    (Math.min(labelLen, 40) / 40) * (maxHeight - minHeight);
 
   const spineColor = book.color || "#f97316";
 
@@ -116,11 +101,11 @@ const heightRem =
       )`;
 
   const backgroundSize = hasCover
-    ? "100% 100%, auto 100%" // overlay + cover
+    ? "100% 100%, auto 100%"
     : "100% 100%";
 
   const backgroundPosition = hasCover
-    ? "center center, left center" // left side of cover looks like spine
+    ? "center center, left center"
     : "center center";
 
   const backgroundRepeat = hasCover ? "no-repeat, no-repeat" : "no-repeat";
@@ -131,39 +116,34 @@ const heightRem =
       onDragStart={() => onDragStart(book.id)}
       onDragEnd={onDragEnd}
       title={book.title || label}
-style={{
-  width: `${widthRem}rem`,
-  height: `${heightRem}rem`,
-  borderRadius: "0.18rem",
-
-  // NEW realistic spine styles
-  border: "1px solid rgba(15,23,42,0.95)",
-  boxShadow: isDragging
-    ? "0 0 0 2px #facc15, 0 10px 20px rgba(0,0,0,0.8)"
-    : "0 6px 14px rgba(0,0,0,0.6)",
-  transform: isDragging ? "translateY(-4px)" : "translateY(0)",
-  transition: "transform 120ms ease, box-shadow 120ms ease",
-
-  backgroundImage,
-  backgroundSize,
-  backgroundPosition,
-  backgroundRepeat,
-display: "flex",
-alignItems: "center",      // was flex-end
-justifyContent: "center",
-paddingBottom: 0,          // no bottom bias
-  fontSize: "0.46rem",
-  color: "#f9fafb",
-  writingMode: "vertical-rl",
-  textOrientation: "mixed",
-  cursor: "grab",
-  opacity: isDragging ? 0.45 : 1,
-  position: "relative",
-  overflow: "hidden",
-}}
-
+      style={{
+        width: `${widthRem}rem`,
+        height: `${heightRem}rem`,
+        borderRadius: "0.18rem",
+        border: "1px solid rgba(15,23,42,0.95)",
+        boxShadow: isDragging
+          ? "0 0 0 2px #facc15, 0 10px 20px rgba(0,0,0,0.8)"
+          : "0 6px 14px rgba(0,0,0,0.6)",
+        transform: isDragging ? "translateY(-4px)" : "translateY(0)",
+        transition: "transform 120ms ease, box-shadow 120ms ease",
+        backgroundImage,
+        backgroundSize,
+        backgroundPosition,
+        backgroundRepeat,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingBottom: 0,
+        fontSize: "0.46rem",
+        color: "#f9fafb",
+        writingMode: "vertical-rl",
+        textOrientation: "mixed",
+        cursor: "grab",
+        opacity: isDragging ? 0.45 : 1,
+        position: "relative",
+        overflow: "hidden",
+      }}
     >
-      {/* left highlight */}
       <div
         style={{
           position: "absolute",
@@ -178,7 +158,6 @@ paddingBottom: 0,          // no bottom bias
           pointerEvents: "none",
         }}
       />
-      {/* right shadow */}
       <div
         style={{
           position: "absolute",
@@ -192,7 +171,6 @@ paddingBottom: 0,          // no bottom bias
           pointerEvents: "none",
         }}
       />
-      {/* top cap */}
       <div
         style={{
           position: "absolute",
@@ -206,7 +184,6 @@ paddingBottom: 0,          // no bottom bias
           pointerEvents: "none",
         }}
       />
-      {/* bottom page edge */}
       <div
         style={{
           position: "absolute",
@@ -220,43 +197,127 @@ paddingBottom: 0,          // no bottom bias
           pointerEvents: "none",
         }}
       />
-<span
-  style={{
-    zIndex: 1,
-    letterSpacing: "0.03em",
-    textTransform: "uppercase",
-    fontWeight: 600,
-    lineHeight: 1.1,
-    whiteSpace: "normal",
-    wordBreak: "break-word",
-    overflow: "visible",
-    textOverflow: "clip",
-  }}
->
+      <span
+        style={{
+          zIndex: 1,
+          letterSpacing: "0.03em",
+          textTransform: "uppercase",
+          fontWeight: 600,
+          lineHeight: 1.1,
+          whiteSpace: "normal",
+          wordBreak: "break-word",
+          overflow: "visible",
+          textOverflow: "clip",
+        }}
+      >
         {label}
       </span>
     </div>
   );
 }
 
+// ---------- DECOR ITEM ----------
+
+function DecorItem({ decor, draggingItemId, onDragStart, onDragEnd }) {
+  const isDragging = draggingItemId === decor.id;
+  const kind = decor.decorKind || "decor";
+
+  function getClampedVariant(raw, maxVariant) {
+    let v = raw;
+    if (v === undefined || v === null) v = 1;
+    v = parseInt(v, 10);
+    if (!Number.isFinite(v)) v = 1;
+    return Math.min(maxVariant, Math.max(1, v));
+  }
+
+  let imgSrc = "/decor/plant-1.png";
+  let wrapperWidthRem = 9;
+  let wrapperHeightRem = 10.5;
+
+  if (kind === "plant") {
+    const variant = getClampedVariant(decor.decorVariant, 5);
+    imgSrc = `/decor/plant-${variant}.png`;
+    wrapperWidthRem = 9;
+    wrapperHeightRem = 10.5;
+  } else if (kind === "candle") {
+    const variant = getClampedVariant(decor.decorVariant, 4);
+    imgSrc = `/decor/candle-${variant}.png`;
+    wrapperWidthRem = 4.5;
+    wrapperHeightRem = 5.8;
+  } else if (kind === "bookend") {
+    const variant = getClampedVariant(decor.decorVariant, 1);
+    imgSrc = `/decor/bookends-${variant}.png`;
+    wrapperWidthRem = 8.5;
+    wrapperHeightRem = 7.5;
+  }
+
+  return (
+    <div
+      draggable
+      onDragStart={() => onDragStart(decor.id)}
+      onDragEnd={onDragEnd}
+      title={decor.title || decor.label || kind}
+      style={{
+        width: `${wrapperWidthRem}rem`,
+        height: `${wrapperHeightRem}rem`,
+        background: "transparent",
+        border: "none",
+        borderRadius: 0,
+        boxShadow: "none",
+        transform: isDragging ? "translateY(-4px)" : "none",
+        opacity: isDragging ? 0.7 : 1,
+        cursor: "grab",
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        overflow: "visible",
+        pointerEvents: "auto",
+        position: "relative",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imgSrc}
+        alt={decor.title || decor.label || kind}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          objectPosition: "bottom center",
+          pointerEvents: "none",
+          filter: isDragging
+            ? "drop-shadow(0 10px 14px rgba(0,0,0,0.9))"
+            : "drop-shadow(0 6px 10px rgba(0,0,0,0.75))",
+        }}
+      />
+    </div>
+  );
+}
+
+// ---------- MAIN PAGE ----------
+
 export default function HomePage() {
   const [userId, setUserId] = useState(null);
-  const [books, setBooks] = useState([]);
-  const [draggingBookId, setDraggingBookId] = useState(null);
+  const [items, setItems] = useState([]);
+  const [draggingItemId, setDraggingItemId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const initializedRef = useRef(false);
 
-  // Google Books search + overlay state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
-const [themeId, setThemeId] = useState("cozy");
-const theme = ROOM_THEMES[themeId] || ROOM_THEMES.cozy;
 
-  // 1) Ensure we have an anonymous user
+  // Single active theme (cozy only, others hidden)
+  const theme = ROOM_THEMES.cozy;
+
+  const [showDecorTray] = useState(true);
+  const [showDecorPalette, setShowDecorPalette] = useState(true);
+  const [showPlantOptions, setShowPlantOptions] = useState(false);
+  const [showCandleOptions, setShowCandleOptions] = useState(false);
+
   useEffect(() => {
     const unsubscribe = ensureAnonymousUser((user) => {
       setUserId(user.uid);
@@ -264,47 +325,47 @@ const theme = ROOM_THEMES[themeId] || ROOM_THEMES.cozy;
     return () => unsubscribe();
   }, []);
 
-  // 2) Once we have a user, ensure shelf + seed books + subscribe
   useEffect(() => {
     if (!userId || initializedRef.current) return;
     initializedRef.current = true;
 
-    let unsubscribeBooks;
+    let unsubscribeItems;
 
     (async () => {
       try {
         await ensureDefaultShelf(userId);
         await seedInitialBooksIfEmpty(userId);
-        unsubscribeBooks = subscribeToBooks(
+        unsubscribeItems = subscribeToBooks(
           userId,
-          (booksFromDb) => {
-            setBooks(booksFromDb);
+          (itemsFromDb) => {
+            setItems(itemsFromDb);
             setLoading(false);
           },
           (err) => {
-            console.error("Book subscription error:", err);
-            setErrorMsg("Error loading books from server.");
+            console.error("Item subscription error:", err);
+            setErrorMsg("Error loading items from server.");
             setLoading(false);
           }
         );
       } catch (err) {
-        console.error("Error initializing shelf/books:", err);
+        console.error("Error initializing shelf/items:", err);
         setErrorMsg("Error initializing shelf.");
         setLoading(false);
       }
     })();
 
     return () => {
-      if (unsubscribeBooks) unsubscribeBooks();
+      if (unsubscribeItems) unsubscribeItems();
     };
   }, [userId]);
 
-  const trayBooks = books.filter((b) => b.shelfIndex === null);
+  const trayItems = items.filter((i) => i.shelfIndex === null);
+  const trayBooks = trayItems.filter((i) => i.type === "book" || !i.type);
+  const trayDecor = trayItems.filter((i) => i.type === "decor");
 
-  const getBooksOnShelf = (shelfIndex) => {
-    const shelfBooks = books.filter((b) => b.shelfIndex === shelfIndex);
-    // Sort by shelfPos if present, otherwise keep current order
-    return [...shelfBooks].sort((a, b) => {
+  const getShelfItems = (shelfIndex) => {
+    const shelfItems = items.filter((i) => i.shelfIndex === shelfIndex);
+    return [...shelfItems].sort((a, b) => {
       const aPos =
         typeof a.shelfPos === "number" ? a.shelfPos : Number.POSITIVE_INFINITY;
       const bPos =
@@ -314,122 +375,149 @@ const theme = ROOM_THEMES[themeId] || ROOM_THEMES.cozy;
     });
   };
 
-  function handleDragStart(bookId) {
-    setDraggingBookId(bookId);
+  function handleDragStart(itemId) {
+    setDraggingItemId(itemId);
   }
 
   function handleDragEnd() {
-    setDraggingBookId(null);
+    setDraggingItemId(null);
   }
 
   function handleDragOver(e) {
     e.preventDefault();
   }
 
-  async function moveBookToTray() {
-    if (!draggingBookId || !userId) return;
-    const bookId = draggingBookId;
+  async function moveItemToTray(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!draggingItemId || !userId) return;
 
-    setBooks((prev) =>
-      prev.map((b) =>
-        b.id === bookId ? { ...b, shelfIndex: null, shelfPos: null } : b
+    const itemId = draggingItemId;
+
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === itemId ? { ...i, shelfIndex: null, shelfPos: null } : i
       )
     );
-    setDraggingBookId(null);
+    setDraggingItemId(null);
 
     try {
-      await updateBookShelfPosition(userId, bookId, null, null);
+      await updateBookShelfPosition(userId, itemId, null, null);
     } catch (err) {
-      console.error("Error moving book to tray:", err);
-      setErrorMsg("Failed to move book. Try again.");
+      console.error("Error moving item to tray:", err);
+      setErrorMsg("Failed to move item. Try again.");
     }
   }
-async function handleDeleteBookFromTray(bookId) {
-  if (!userId) return;
 
-  // Optimistic remove
-  setBooks((prev) => prev.filter((b) => b.id !== bookId));
+  async function moveItemToShelf(e, targetShelfIndex) {
+    if (!draggingItemId || !userId) return;
+    e.preventDefault();
 
-  try {
-    await deleteBook(userId, bookId);
-  } catch (err) {
-    console.error("Error deleting book:", err);
-    setErrorMsg("Failed to remove book.");
-  }
-}
-async function handleRandomTrayFill() {
-  if (!userId) return;
-  setErrorMsg("");
+    const itemId = draggingItemId;
 
-  try {
-    // Pick a random subject and starting offset
-    const subjects = [
-      "fiction",
-      "fantasy",
-      "mystery",
-      "romance",
-      "horror",
-      "young+adult",
-      "historical+fiction",
-    ];
-    const subject =
-      subjects[Math.floor(Math.random() * subjects.length)];
+    const rect = e.currentTarget.getBoundingClientRect();
+    const rawX = e.clientX - rect.left;
+    const clampedX = Math.max(0, Math.min(rawX, rect.width));
+    const shelfPos = rect.width > 0 ? clampedX / rect.width : 0.5;
 
-    const startIndex = Math.floor(Math.random() * 40); // 0–39
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === itemId
+          ? { ...i, shelfIndex: targetShelfIndex, shelfPos }
+          : i
+      )
+    );
+    setDraggingItemId(null);
 
-    const url = `https://www.googleapis.com/books/v1/volumes?q=subject:${subject}&printType=books&maxResults=8&startIndex=${startIndex}`;
-
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Google Books error: ${res.status}`);
+    try {
+      await updateBookShelfPosition(userId, itemId, targetShelfIndex, shelfPos);
+    } catch (err) {
+      console.error("Error moving item to shelf:", err);
+      setErrorMsg("Failed to move item. Try again.");
     }
+  }
 
-    const data = await res.json();
-    const items = Array.isArray(data.items) ? data.items : [];
+  async function handleDeleteItemFromTray(itemId) {
+    if (!userId) return;
 
-    if (!items.length) {
-      setErrorMsg("No random books found. Try again.");
+    setItems((prev) => prev.filter((i) => i.id !== itemId));
+
+    try {
+      await deleteBook(userId, itemId);
+    } catch (err) {
+      console.error("Error deleting item:", err);
+      setErrorMsg("Failed to remove item.");
+    }
+  }
+
+  async function handleRandomTrayFill() {
+    if (!userId) return;
+    setErrorMsg("");
+
+    const currentTrayItems = items.filter((i) => i.shelfIndex === null);
+    if (currentTrayItems.length >= MAX_TRAY_ITEMS) {
+      setErrorMsg(
+        "Tray is full. Move some items to a shelf or remove them."
+      );
       return;
     }
 
-    // Append new books: do NOT clear existing ones
-    await Promise.all(
-      items.map((volume) => addBookFromGoogleVolume(userId, volume))
-    );
-  } catch (err) {
-    console.error("Error fetching random books:", err);
-    setErrorMsg("Failed to fetch random books. Try again.");
+    try {
+      const subjects = [
+        "fiction",
+        "fantasy",
+        "mystery",
+        "romance",
+        "horror",
+        "young+adult",
+        "historical+fiction",
+      ];
+      const subject =
+        subjects[Math.floor(Math.random() * subjects.length)];
+
+      const startIndex = Math.floor(Math.random() * 40);
+
+      const url = `https://www.googleapis.com/books/v1/volumes?q=subject:${subject}&printType=books&maxResults=8&startIndex=${startIndex}`;
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Google Books error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      const fetchedItems = Array.isArray(data.items) ? data.items : [];
+
+      if (!fetchedItems.length) {
+        setErrorMsg("No random books found. Try again.");
+        return;
+      }
+
+      await Promise.all(
+        fetchedItems.map((volume) => addBookFromGoogleVolume(userId, volume))
+      );
+    } catch (err) {
+      console.error("Error fetching random books:", err);
+      setErrorMsg("Failed to fetch random books. Try again.");
+    }
   }
-}
-async function moveBookToShelf(e, targetShelfIndex) {
-  if (!draggingBookId || !userId) return;
-  e.preventDefault();
 
-  const bookId = draggingBookId;
+  async function handleAddDecor(decorKind, variantIndex) {
+    if (!userId) return;
 
-  // Figure out where on the shelf we dropped (0–1 across the width)
-  const rect = e.currentTarget.getBoundingClientRect();
-  const rawX = e.clientX - rect.left;
-  const clampedX = Math.max(0, Math.min(rawX, rect.width));
-  const shelfPos = rect.width > 0 ? clampedX / rect.width : 0.5;
+    const currentTrayItems = items.filter((i) => i.shelfIndex === null);
+    if (currentTrayItems.length >= MAX_TRAY_ITEMS) {
+      setErrorMsg(
+        "Tray is full. Move some items to a shelf or remove them."
+      );
+      return;
+    }
 
-  // Optimistic local update
-  setBooks((prev) =>
-    prev.map((b) =>
-      b.id === bookId
-        ? { ...b, shelfIndex: targetShelfIndex, shelfPos }
-        : b
-    )
-  );
-  setDraggingBookId(null);
-
-  try {
-    await updateBookShelfPosition(userId, bookId, targetShelfIndex, shelfPos);
-  } catch (err) {
-    console.error("Error moving book to shelf:", err);
-    setErrorMsg("Failed to move book. Try again.");
+    try {
+      await addDecorItem(userId, decorKind, variantIndex);
+    } catch (err) {
+      console.error("Error adding decor item:", err);
+      setErrorMsg("Failed to add decor item.");
+    }
   }
-}
 
   function openSearchOverlay() {
     setIsSearchOpen(true);
@@ -468,10 +556,10 @@ async function moveBookToShelf(e, targetShelfIndex) {
       }
 
       const data = await res.json();
-      const items = Array.isArray(data.items) ? data.items : [];
-      setSearchResults(items);
+      const fetchedItems = Array.isArray(data.items) ? data.items : [];
+      setSearchResults(fetchedItems);
 
-      if (items.length === 0) {
+      if (fetchedItems.length === 0) {
         setSearchError("No books found for that search.");
       }
     } catch (err) {
@@ -487,6 +575,15 @@ async function moveBookToShelf(e, targetShelfIndex) {
       setSearchError("User not ready yet. Try again in a moment.");
       return;
     }
+
+    const currentTrayItems = items.filter((i) => i.shelfIndex === null);
+    if (currentTrayItems.length >= MAX_TRAY_ITEMS) {
+      setSearchError(
+        "Tray is full. Move some items to a shelf or remove them."
+      );
+      return;
+    }
+
     try {
       await addBookFromGoogleVolume(userId, volume);
     } catch (err) {
@@ -496,94 +593,81 @@ async function moveBookToShelf(e, targetShelfIndex) {
   }
 
   return (
-<main
-  style={{
-    minHeight: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    backgroundImage: `url(${theme.backgroundImage})`,
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundRepeat: "no-repeat",
-    backgroundColor: "#020617",
-    color: "#f5f5f5",
-    fontFamily:
-      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    position: "relative",
-    overflow: "hidden",
-  }}
->
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        backgroundImage: `url(${theme.backgroundImage})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "#020617",
+        color: "#f5f5f5",
+        fontFamily:
+          "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(0,0,0,0.25)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
 
-    {/* DARK OVERLAY GOES HERE */}
-<div
-  style={{
-    position: "absolute",
-    inset: 0,
-    background: "rgba(0,0,0,0.25)", // softer dim, no blur
-    pointerEvents: "none",
-    zIndex: 0,
-  }}
-/>
-
-      {/* Header */}
-<header
-  style={{
-    padding: "1rem 2rem",
-    borderBottom: "1px solid #27272a",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    position: "relative",
-    zIndex: 1,
-  }}
->
-
+      <header
+        style={{
+          padding: "1rem 2rem",
+          borderBottom: "1px solid #27272a",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
         <div>
           <h1 style={{ margin: 0, fontSize: "1.5rem" }}>Fidget Bookshelf</h1>
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#a1a1aa" }}>
-            Drag books between your tray and shelves. Layout is saved in
-            Firebase. Add real books from Google Books.
+            Build your dream shelf: drag books and decor between the tray and
+            shelves. Your layout stays put, and you can pull in real titles
+            using the “Add Books” search.
           </p>
         </div>
 
-<div style={{ display: "flex", gap: "0.4rem" }}>
-  {Object.values(ROOM_THEMES).map((t) => {
-    const active = t.id === themeId;
-    return (
-      <button
-        key={t.id}
-        type="button"
-        onClick={() => setThemeId(t.id)}
-        style={{
-          padding: "0.3rem 0.7rem",
-          borderRadius: "999px",
-          border: active ? "1px solid #e5e5e5" : "1px solid #3f3f46",
-          backgroundColor: active ? "#f9fafb" : "#27272a",
-          color: active ? "#020617" : "#e4e4e7",
-          fontSize: "0.75rem",
-          cursor: "pointer",
-          opacity: active ? 1 : 0.8,
-        }}
-      >
-        {t.label}
-      </button>
-    );
-  })}
-</div>
+        {/* Single theme badge – other themes hidden for now */}
+        <div
+          style={{
+            padding: "0.35rem 0.9rem",
+            borderRadius: "999px",
+            border: "1px solid rgba(255,255,255,0.35)",
+            backgroundColor: "rgba(0,0,0,0.45)",
+            backdropFilter: "blur(6px)",
+            fontSize: "0.78rem",
+            color: "rgba(255,255,255,0.85)",
+          }}
+        >
+          Cozy Bookstore
+        </div>
       </header>
 
-      {/* Main content area */}
-<section
-  style={{
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    padding: "1.5rem 2rem",
-    gap: "1.5rem",
-    position: "relative",
-    zIndex: 1,
-  }}
->
+      <section
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          padding: "1.5rem 2rem",
+          gap: "1.5rem",
+          position: "relative",
+          zIndex: 1,
+          minHeight: 0,
+        }}
+      >
         <div
           style={{
             display: "flex",
@@ -592,94 +676,80 @@ async function moveBookToShelf(e, targetShelfIndex) {
             minHeight: 0,
           }}
         >
-{/* Left: Room + shelves */}
-<div
-  style={{
-    flex: 3,
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: "1rem 0",
-    background: "transparent",   // was big navy gradient
-    position: "relative",
-  }}
->
-
-            {/* Fake background wall */}
+          {/* LEFT: BOOKCASE */}
+          <div
+            style={{
+              flex: 3,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "stretch",
+              padding: "0.5rem 0 1rem",
+              background: "transparent",
+              position: "relative",
+              minHeight: 0,
+            }}
+          >
             <div
               style={{
-                position: "absolute",
-                inset: "0",
-                opacity: 0.15,
-                backgroundImage: theme.wallOverlay,
-                pointerEvents: "none",
+                position: "relative",
+                margin: "auto",
+                marginTop: 0,
+                width: "55%",
+                maxWidth: "850px",
+                minWidth: "600px",
+                height: "100%",
+                borderRadius: "0.9rem",
+                border: `2px solid ${theme.bookcaseBorder}`,
+                background: theme.bookcaseBackground,
+                boxShadow: "0 20px 45px rgba(0,0,0,0.9)",
+                display: "flex",
+                flexDirection: "column",
+                padding: "0.9rem 0.9rem 1.1rem",
+                gap: "0.65rem",
+                overflow: "visible",
               }}
-            />
-
-            {/* Bookcase box */}
-            <div
-style={{
-  position: "relative",
-  margin: "auto",
-  marginTop: "1rem",
-width: "55%",
-maxWidth: "850px",
-minWidth: "600px",
-  minHeight: "20rem",
-  borderRadius: "0.9rem",
-  border: `2px solid ${theme.bookcaseBorder}`,
-  background: theme.bookcaseBackground,
-  boxShadow: "0 20px 45px rgba(0,0,0,0.9)",
-  display: "flex",
-  flexDirection: "column",
-  padding: "0.9rem 0.9rem 1.1rem",
-  gap: "0.65rem",
-  overflow: "hidden",
-}}
-
             >
-              {/* inner frame / shadow to sell depth */}
-<div
-  style={{
-    position: "absolute",
-    inset: "0.45rem 0.45rem 0.6rem 0.45rem",
-    borderRadius: "0.7rem",
-    boxShadow:
-      "inset 0 0 0 1px rgba(15,23,42,0.9), inset 0 18px 35px rgba(0,0,0,0.9)",
-    pointerEvents: "none",
-    zIndex: 0,
-  }}
-/>
+              <div
+                style={{
+                  position: "absolute",
+                  inset: "0.45rem 0.45rem 0.6rem 0.45rem",
+                  borderRadius: "0.7rem",
+                  boxShadow:
+                    "inset 0 0 0 1px rgba(40,22,10,0.9), inset 0 18px 35px rgba(30,15,5,0.9)",
+                  pointerEvents: "none",
+                  zIndex: 0,
+                }}
+              />
 
-{/* subtle side darkening to mimic uprights */}
-<div
-  style={{
-    position: "absolute",
-    top: "0.7rem",
-    bottom: "0.9rem",
-    left: "0.6rem",
-    width: "0.55rem",
-    borderRadius: "0.4rem",
-    background:
-      "linear-gradient(to right, rgba(0,0,0,0.7), rgba(0,0,0,0.2))",
-    pointerEvents: "none",
-    zIndex: 0,
-  }}
-/>
-<div
-  style={{
-    position: "absolute",
-    top: "0.7rem",
-    bottom: "0.9rem",
-    right: "0.6rem",
-    width: "0.55rem",
-    borderRadius: "0.4rem",
-    background:
-      "linear-gradient(to left, rgba(0,0,0,0.7), rgba(0,0,0,0.2))",
-    pointerEvents: "none",
-    zIndex: 0,
-  }}
-/>
+              <div
+                style={{
+                  position: "absolute",
+                  top: "0.7rem",
+                  bottom: "0.9rem",
+                  left: "0.6rem",
+                  width: "0.55rem",
+                  borderRadius: "0.4rem",
+                  background:
+                    "linear-gradient(to right, rgba(45,25,10,0.75), rgba(85,55,25,0.25))",
+                  pointerEvents: "none",
+                  zIndex: 0,
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: "0.7rem",
+                  bottom: "0.9rem",
+                  right: "0.6rem",
+                  width: "0.55rem",
+                  borderRadius: "0.4rem",
+                  background:
+                    "linear-gradient(to left, rgba(45,25,10,0.75), rgba(85,55,25,0.25))",
+                  pointerEvents: "none",
+                  zIndex: 0,
+                }}
+              />
+
               {loading ? (
                 <div
                   style={{
@@ -688,103 +758,97 @@ minWidth: "600px",
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: "0.9rem",
-                    color: "#a1a1aa",
+                    color: "#e5e7eb",
                   }}
                 >
                   Loading your shelf...
                 </div>
               ) : (
                 SHELVES.map((shelfIndex) => {
-                  const shelfBooks = getBooksOnShelf(shelfIndex);
+                  const shelfItems = getShelfItems(shelfIndex);
                   return (
                     <div
                       key={shelfIndex}
                       onDragOver={handleDragOver}
-                      onDrop={(e) => moveBookToShelf(e, shelfIndex)}
-style={{
-  flex: 1,
-  minHeight: "9.5rem",                 // taller shelves
-  borderRadius: "0.4rem",
-  border: `1px solid ${theme.shelfBorder}`,
-  background: theme.shelfBackground,
-  position: "relative",
-  padding: "0.6rem 0.8rem 1.4rem",     // more top + bottom room inside
-  overflow: "visible",
-  zIndex: 1,
-}}
+                      onDrop={(e) => moveItemToShelf(e, shelfIndex)}
+                      style={{
+                        flex: 1,
+                        minHeight: "9.5rem",
+                        borderRadius: "0.4rem",
+                        border: `1px solid ${theme.shelfBorder}`,
+                        background: theme.shelfBackground,
+                        position: "relative",
+                        padding: "0.6rem 0.8rem 1.4rem",
+                        overflow: "visible",
+                        zIndex: 1,
+                      }}
                     >
-                       {/* shelf board */}
-  <div
-    style={{
-      position: "absolute",
-      left: "0.8rem",
-      right: "0.8rem",
-      bottom: "0.4rem",
-      height: "0.9rem",
-      borderRadius: "0.5rem 0.5rem 0.3rem 0.3rem",
-      background:
-        "linear-gradient(180deg, rgba(15,23,42,0.9), rgba(3,7,18,1))",
-      boxShadow:
-        "0 -2px 3px rgba(15,23,42,0.9), 0 4px 8px rgba(0,0,0,0.9)",
-      pointerEvents: "none",
-      zIndex: 1,
-    }}
-  />
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "0.8rem",
+                          right: "0.8rem",
+                          bottom: "0.4rem",
+                          height: "0.9rem",
+                          borderRadius: "0.5rem 0.5rem 0.3rem 0.3rem",
+                          background:
+                            "linear-gradient(180deg, rgba(72,40,15,1), rgba(38,20,8,1))",
+                          boxShadow:
+                            "0 -2px 3px rgba(30,18,10,0.9), 0 4px 8px rgba(0,0,0,0.9)",
+                          pointerEvents: "none",
+                          zIndex: 1,
+                        }}
+                      />
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "1rem",
+                          right: "1rem",
+                          bottom: "0.15rem",
+                          height: "0.28rem",
+                          borderRadius: "0.25rem",
+                          background:
+                            "linear-gradient(to top, #5c3317, #8b4513)",
+                          boxShadow: "0 2px 4px rgba(0,0,0,1)",
+                          pointerEvents: "none",
+                          zIndex: 2,
+                        }}
+                      />
 
-  {/* front lip */}
-  <div
-    style={{
-      position: "absolute",
-      left: "1rem",
-      right: "1rem",
-      bottom: "0.15rem",
-      height: "0.28rem",
-      borderRadius: "0.25rem",
-      background:
-        "linear-gradient(to top, rgba(15,23,42,1), rgba(15,23,42,0.5))",
-      boxShadow: "0 2px 4px rgba(0,0,0,1)",
-      pointerEvents: "none",
-      zIndex: 2,
-    }}
-  />
-
-                      {shelfBooks.length === 0 ? (
-                        <div
-                          style={{
-                            fontSize: "0.7rem",
-                            color: "#52525b",
-                            fontStyle: "italic",
-                            position: "absolute",
-                            left: "0.5rem",
-                            bottom: "0.5rem",
-                          }}
-                        >
-                          
-                        </div>
-                      ) : null}
-
-                      {shelfBooks.map((book, index) => {
-                        const hasPos = typeof book.shelfPos === "number";
+                      {shelfItems.map((item, index) => {
+                        const hasPos =
+                          typeof item.shelfPos === "number";
                         const fallbackPos =
-                          (index + 1) / (shelfBooks.length + 1);
-                        const pos = hasPos ? book.shelfPos : fallbackPos;
+                          (index + 1) / (shelfItems.length + 1);
+                        const pos = hasPos ? item.shelfPos : fallbackPos;
                         const leftPercent = pos * 100;
 
                         return (
                           <div
-                            key={book.id}
+                            key={item.id}
                             style={{
                               position: "absolute",
                               bottom: "0.35rem",
                               left: `calc(${leftPercent}% - 0.7rem)`,
+                              zIndex:
+                                item.type === "decor" ? 4 : 3,
                             }}
                           >
-                            <BookSpine
-                              book={book}
-                              draggingBookId={draggingBookId}
-                              onDragStart={handleDragStart}
-                              onDragEnd={handleDragEnd}
-                            />
+                            {item.type === "decor" ? (
+                              <DecorItem
+                                decor={item}
+                                draggingItemId={draggingItemId}
+                                onDragStart={handleDragStart}
+                                onDragEnd={handleDragEnd}
+                              />
+                            ) : (
+                              <BookSpine
+                                book={item}
+                                draggingItemId={draggingItemId}
+                                onDragStart={handleDragStart}
+                                onDragEnd={handleDragEnd}
+                              />
+                            )}
                           </div>
                         );
                       })}
@@ -792,212 +856,507 @@ style={{
                   );
                 })
               )}
+
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "-1.2rem",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: "calc(100% - 1.8rem)",
+                  height: "1.2rem",
+                  borderRadius: "0.3rem",
+                  background:
+                    "linear-gradient(180deg, #2a1609 0%, #1c0f06 60%, #120903 100%)",
+                  boxShadow: "0 8px 25px rgba(0,0,0,0.7)",
+                  zIndex: 0,
+                }}
+              />
             </div>
           </div>
 
-          {/* Right: Info / instructions */}
-          <aside
+          {/* RIGHT: BOOK TRAY PANEL */}
+          <section
             style={{
               flex: 1,
               borderRadius: "1rem",
-              border: "1px solid #27272a",
-              backgroundColor: "#09090b",
-              padding: "1rem",
+              border: `1px solid ${theme.shelfBorder}`,
+              background: theme.bookcaseBackground,
+              padding: "0.75rem 1rem",
               display: "flex",
               flexDirection: "column",
-              gap: "0.75rem",
+              gap: "0.7rem",
+              minHeight: 0,
             }}
           >
-            <h2 style={{ margin: 0, fontSize: "1.1rem" }}>
-              How this works now
-            </h2>
-            <ol
+            <div
               style={{
-                margin: 0,
-                paddingLeft: "1.3rem",
-                fontSize: "0.9rem",
-                color: "#a1a1aa",
                 display: "flex",
-                flexDirection: "column",
-                gap: "0.4rem",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "0.75rem",
               }}
             >
-              <li>Anonymous user + default shelf per browser.</li>
-              <li>Starter books are seeded only once if needed.</li>
-              <li>
-                Drag books between tray and shelves; layout (including
-                position) is saved to Firestore.
-              </li>
-              <li>
-                Use the floating <strong>+ Add Books</strong> button to pull
-                titles from Google Books into your tray.
-              </li>
-            </ol>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <h3 style={{ margin: 0, fontSize: "0.95rem" }}>
+                  Book tray
+                </h3>
+                <span
+                  style={{ fontSize: "0.8rem", color: "#e5e7eb" }}
+                >
+                  Drag a book from here onto any shelf.
+                </span>
+              </div>
+
+              {/* Add Books + Random books stacked on the right */}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.35rem",
+                  alignItems: "flex-end",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={openSearchOverlay}
+                  style={{
+                    padding: "0.35rem 0.9rem",
+                    borderRadius: "999px",
+                    border: "none",
+                    background:
+                      "linear-gradient(to right, #3b82f6, #6366f1)",
+                    color: "#f9fafb",
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    boxShadow: "0 4px 10px rgba(0,0,0,0.45)",
+                  }}
+                >
+                  Add Books
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleRandomTrayFill}
+                  style={{
+                    padding: "0.35rem 0.9rem",
+                    borderRadius: "999px",
+                    border: `1px solid ${theme.shelfBorder}`,
+                    backgroundColor: "rgba(0,0,0,0.45)",
+                    color: "#f9fafb",
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Random books
+                </button>
+              </div>
+            </div>
+
+            <div
+              onDragOver={handleDragOver}
+              onDrop={moveItemToTray}
+              style={{
+                flex: 1,
+                minHeight: "5.4rem",
+                borderRadius: "0.5rem",
+                border: `1px dashed ${theme.shelfBorder}`,
+                background: theme.shelfBackground,
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "flex-end",
+                padding: "0.6rem 0.6rem 0.5rem",
+                gap: "0.35rem",
+                overflow: "hidden",
+                boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.45)",
+              }}
+            >
+              {loading ? (
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "#e5e7eb",
+                    fontStyle: "italic",
+                  }}
+                >
+                  Loading books...
+                </div>
+              ) : trayBooks.length === 0 ? (
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "#e5e7eb",
+                    fontStyle: "italic",
+                  }}
+                >
+                  No books in the tray. Drag from shelves to put them
+                  back.
+                </div>
+              ) : null}
+
+              {trayBooks.map((book) => (
+                <div
+                  key={book.id}
+                  style={{
+                    position: "relative",
+                    paddingRight: "0.3rem",
+                  }}
+                >
+                  <BookSpine
+                    book={book}
+                    draggingItemId={draggingItemId}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteItemFromTray(book.id)}
+                    title="Remove from tray"
+                    style={{
+                      position: "absolute",
+                      top: "-0.4rem",
+                      right: "-0.1rem",
+                      width: "1rem",
+                      height: "1rem",
+                      borderRadius: "999px",
+                      border: "none",
+                      backgroundColor: "rgba(15,23,42,0.9)",
+                      color: "#e5e5e5",
+                      fontSize: "0.7rem",
+                      lineHeight: 1,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+
             {errorMsg ? (
-              <p style={{ fontSize: "0.8rem", color: "#f97373" }}>
+              <p
+                style={{
+                  fontSize: "0.8rem",
+                  color: "#fecaca",
+                  margin: 0,
+                  marginTop: "0.4rem",
+                }}
+              >
                 {errorMsg}
               </p>
             ) : (
-              <p style={{ fontSize: "0.8rem", color: "#71717a" }}>
-                Refresh the page and your books stay exactly where you left
-                them.
+              <p
+                style={{
+                  fontSize: "0.8rem",
+                  color: "#e5e7eb",
+                  margin: 0,
+                  marginTop: "0.4rem",
+                }}
+              >
+                Refresh the page and your books and decor stay exactly
+                where you left them.
               </p>
             )}
-          </aside>
+          </section>
         </div>
 
-        {/* Tray area */}
+        {/* DECOR TRAY – FULL WIDTH BELOW SHELVES */}
         <section
           style={{
-            borderRadius: "0.75rem",
-            border: "1px solid #27272a",
-            backgroundColor: "#09090b",
-            padding: "0.75rem 1rem",
+            borderRadius: "1rem",
+            border: `1px solid ${theme.shelfBorder}`,
+            background: theme.bookcaseBackground,
+            padding: "0.75rem 1rem 1rem",
             display: "flex",
             flexDirection: "column",
             gap: "0.5rem",
           }}
         >
-<div
-  style={{
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "0.75rem",
-  }}
->
-  <div style={{ display: "flex", flexDirection: "column" }}>
-    <h3 style={{ margin: 0, fontSize: "0.95rem" }}>Book tray</h3>
-    <span style={{ fontSize: "0.8rem", color: "#a1a1aa" }}>
-      Drag a book from here onto any shelf.
-    </span>
-  </div>
-<button
-  type="button"
-  onClick={handleRandomTrayFill}
-  style={{
-    padding: "0.35rem 0.9rem",
-    borderRadius: "999px",
-    border: "1px solid #3f3f46",
-    backgroundColor: "#18181b",
-    color: "#e4e4e7",
-    fontSize: "0.8rem",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  }}
->
-  Random books
-</button>
-
-</div>
-
-
+          {/* header row: title + show/hide palette */}
           <div
-            onDragOver={handleDragOver}
-            onDrop={moveBookToTray}
             style={{
-              minHeight: "5.4rem",
-              borderRadius: "0.5rem",
-              border: "1px dashed #3f3f46",
-              background:
-                "linear-gradient(to right, rgba(24,24,27,0.9), rgba(17,24,39,0.9))",
               display: "flex",
-              alignItems: "flex-end",
-              padding: "0.4rem",
-              gap: "0.25rem",
-              overflowX: "auto",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "0.75rem",
             }}
           >
-            {loading ? (
-              <div
-                style={{
-                  fontSize: "0.8rem",
-                  color: "#52525b",
-                  fontStyle: "italic",
-                }}
-              >
-                Loading books...
-              </div>
-            ) : trayBooks.length === 0 ? (
-              <div
-                style={{
-                  fontSize: "0.8rem",
-                  color: "#52525b",
-                  fontStyle: "italic",
-                }}
-              >
-                No books in the tray. Drag from shelves to put them back.
-              </div>
-            ) : null}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.6rem",
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "0.95rem" }}>
+                Decor tray
+              </h3>
 
-{trayBooks.map((book) => (
-  <div
-    key={book.id}
-    style={{ position: "relative", paddingRight: "0.3rem" }}
-  >
-    <BookSpine
-      book={book}
-      draggingBookId={draggingBookId}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    />
-    <button
-      type="button"
-      onClick={() => handleDeleteBookFromTray(book.id)}
-      title="Remove from tray"
-      style={{
-        position: "absolute",
-        top: "-0.4rem",
-        right: "-0.1rem",
-        width: "1rem",
-        height: "1rem",
-        borderRadius: "999px",
-        border: "none",
-        backgroundColor: "rgba(15,23,42,0.9)",
-        color: "#e5e5e5",
-        fontSize: "0.7rem",
-        lineHeight: 1,
-        cursor: "pointer",
-      }}
-    >
-      ×
-    </button>
-  </div>
-))}
+              <button
+                type="button"
+                onClick={() => setShowDecorPalette((v) => !v)}
+                style={{
+                  borderRadius: "999px",
+                  border: `1px solid ${theme.shelfBorder}`,
+                  backgroundColor: "rgba(0,0,0,0.5)",
+                  color: "#e5e7eb",
+                  fontSize: "0.75rem",
+                  padding: "0.1rem 0.7rem",
+                  cursor: "pointer",
+                }}
+              >
+                {showDecorPalette ? "Hide options" : "Show options"}
+              </button>
+            </div>
+
+            {/* Palette row (plants + candles, both collapsible) */}
+            {showDecorPalette && (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.3rem",
+                  flexWrap: "wrap",
+                  justifyContent: "flex-end",
+                  alignItems: "center",
+                }}
+              >
+                {/* PLANT PALETTE – COLLAPSIBLE */}
+                {!showPlantOptions ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowPlantOptions(true)}
+                    style={{
+                      borderRadius: "999px",
+                      border: `1px solid ${theme.shelfBorder}`,
+                      backgroundColor: "rgba(15,23,42,0.9)",
+                      color: "#e5e7eb",
+                      fontSize: "0.75rem",
+                      padding: "0.2rem 0.8rem",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    + Plants
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => handleAddDecor("plant", n)}
+                        style={{
+                          width: "2.4rem",
+                          height: "2.8rem",
+                          borderRadius: "0.6rem",
+                          border:
+                            "1px solid rgba(148,163,184,0.6)",
+                          backgroundColor: "rgba(15,23,42,0.7)",
+                          padding: "0.15rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        title={`Add plant ${n}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/decor/plant-${n}.png`}
+                          alt={`Plant ${n}`}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "contain",
+                          }}
+                        />
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowPlantOptions(false)}
+                      style={{
+                        borderRadius: "999px",
+                        border: `1px solid ${theme.shelfBorder}`,
+                        backgroundColor: "rgba(0,0,0,0.5)",
+                        color: "#e5e7eb",
+                        fontSize: "0.75rem",
+                        padding: "0.2rem 0.7rem",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Hide
+                    </button>
+                  </div>
+                )}
+
+                {/* CANDLE PALETTE – COLLAPSIBLE */}
+                {!showCandleOptions ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCandleOptions(true)}
+                    style={{
+                      borderRadius: "999px",
+                      border: `1px solid ${theme.shelfBorder}`,
+                      backgroundColor: "rgba(250,204,21,0.2)",
+                      color: "#fef9c3",
+                      fontSize: "0.75rem",
+                      padding: "0.2rem 0.8rem",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    + Candles
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.35rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {[1, 2, 3, 4].map((n) => (
+                      <button
+                        key={`candle${n}`}
+                        type="button"
+                        onClick={() => handleAddDecor("candle", n)}
+                        style={{
+                          width: "2.4rem",
+                          height: "2.8rem",
+                          borderRadius: "0.6rem",
+                          border:
+                            "1px solid rgba(148,163,184,0.6)",
+                          backgroundColor: "rgba(250,204,21,0.15)",
+                          padding: "0.15rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        title={`Add candle ${n}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/decor/candle-${n}.png`}
+                          alt={`Candle ${n}`}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "contain",
+                          }}
+                        />
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCandleOptions(false)}
+                      style={{
+                        borderRadius: "999px",
+                        border: `1px solid ${theme.shelfBorder}`,
+                        backgroundColor: "rgba(0,0,0,0.5)",
+                        color: "#e5e7eb",
+                        fontSize: "0.75rem",
+                        padding: "0.2rem 0.7rem",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Hide
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Actual decor items you’ve added */}
+          {showDecorTray && (
+            <div
+              onDragOver={handleDragOver}
+              onDrop={moveItemToTray}
+              style={{
+                minHeight: "6.5rem",
+                borderRadius: "0.75rem",
+                border: `1px dashed ${theme.shelfBorder}`,
+                background: theme.shelfBackground,
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "flex-end",
+                padding: "0.6rem",
+                gap: "0.4rem",
+                overflow: "hidden",
+                boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.45)",
+              }}
+            >
+              {trayDecor.length === 0 ? (
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "#e5e7eb",
+                    fontStyle: "italic",
+                  }}
+                >
+                  Add plants and candles, then drag them onto your
+                  shelves.
+                </span>
+              ) : null}
+
+              {trayDecor.map((decor) => (
+                <div
+                  key={decor.id}
+                  style={{
+                    position: "relative",
+                    paddingRight: "0.2rem",
+                  }}
+                >
+                  <DecorItem
+                    decor={decor}
+                    draggingItemId={draggingItemId}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteItemFromTray(decor.id)}
+                    title="Remove decor"
+                    style={{
+                      position: "absolute",
+                      top: "-0.35rem",
+                      right: "-0.05rem",
+                      width: "0.9rem",
+                      height: "0.9rem",
+                      borderRadius: "999px",
+                      border: "none",
+                      backgroundColor: "rgba(15,23,42,0.9)",
+                      color: "#e5e5e5",
+                      fontSize: "0.65rem",
+                      lineHeight: 1,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </section>
 
-      {/* Floating + Add Books button */}
-      <button
-        type="button"
-        onClick={openSearchOverlay}
-        style={{
-          position: "fixed",
-          right: "1.75rem",
-          bottom: "1.75rem",
-          width: "3.25rem",
-          height: "3.25rem",
-          borderRadius: "999px",
-          border: "none",
-background:
-  `radial-gradient(circle at 30% 30%, ${theme.accent}, #111827)`,
-          color: "#020617",
-          fontSize: "1.6rem",
-          fontWeight: 700,
-          cursor: "pointer",
-          boxShadow: "0 18px 40px rgba(0,0,0,0.5)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 50,
-        }}
-        aria-label="Add books from Google Books"
-      >
-        +
-      </button>
-
-      {/* Google Books search overlay */}
       {isSearchOpen && (
         <div
           style={{
@@ -1045,8 +1404,8 @@ background:
                     color: "#a1a1aa",
                   }}
                 >
-                  Search by title, author, or ISBN. Click “Add to tray” to
-                  drop the book into your shelf tray.
+                  Search by title, author, or ISBN. Click “Add to tray”
+                  to drop the book into your shelf tray.
                 </p>
               </div>
               <button
@@ -1066,7 +1425,6 @@ background:
               </button>
             </div>
 
-            {/* Search form */}
             <form
               onSubmit={handleSearchSubmit}
               style={{
@@ -1111,7 +1469,6 @@ background:
               </button>
             </form>
 
-            {/* Results */}
             <div
               style={{
                 marginTop: "0.25rem",

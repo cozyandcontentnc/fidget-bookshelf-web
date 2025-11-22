@@ -39,7 +39,8 @@ const app = createFirebaseApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Ensure anonymous user
+// ---------- AUTH ----------
+
 export function ensureAnonymousUser(callback) {
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -56,7 +57,8 @@ export function ensureAnonymousUser(callback) {
   return unsubscribe;
 }
 
-// Ensure default shelf exists, return its ref
+// ---------- SHELF REFS ----------
+
 export async function ensureDefaultShelf(userId) {
   const shelfRef = doc(db, "users", userId, "fidgetShelves", "default");
   const snap = await getDoc(shelfRef);
@@ -81,14 +83,13 @@ export function getDefaultShelfRefs(userId) {
   return { shelfRef, booksColRef };
 }
 
-// Seed starter books only if collection is empty
+// ---------- SEED STARTER BOOKS ----------
+
 export async function seedInitialBooksIfEmpty(userId) {
   const { booksColRef } = getDefaultShelfRefs(userId);
   const snapshot = await getDocs(booksColRef);
 
-  if (!snapshot.empty) {
-    return; // already has books, do nothing
-  }
+  if (!snapshot.empty) return;
 
   const starterBooks = [
     { id: "b1", label: "Book 1", color: "#f97316" },
@@ -104,7 +105,9 @@ export async function seedInitialBooksIfEmpty(userId) {
       bookRef,
       {
         id: book.id,
+        type: "book",
         label: book.label,
+        title: book.label,
         color: book.color,
         shelfIndex: null,
         shelfPos: null,
@@ -118,63 +121,80 @@ export async function seedInitialBooksIfEmpty(userId) {
   }
 }
 
-// Subscribe to books on the default shelf
-export function subscribeToBooks(userId, handleBooks, handleError) {
+// ---------- SUBSCRIBE TO ITEMS (BOOKS + DECOR) ----------
+
+export function subscribeToBooks(userId, handleItems, handleError) {
   const { booksColRef } = getDefaultShelfRefs(userId);
 
   return onSnapshot(
     booksColRef,
     (snapshot) => {
-      const books = snapshot.docs.map((docSnap) => {
+      const items = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
+
+        const type = data.type || "book";
+
         return {
           id: docSnap.id,
-          label: data.label || "Book",
+          type,
+          label: data.label || data.title || "Book",
           title: data.title || data.label || "Book",
           color: data.color || "#ffffff",
           thumbnailUrl: data.thumbnailUrl || null,
           pageCount:
             typeof data.pageCount === "number" ? data.pageCount : null,
+
+          // decor fields
+          decorKind: data.decorKind || null,
+          // don't over-filter here – just pass it through
+          decorVariant: data.decorVariant ?? null,
+
           shelfIndex:
             typeof data.shelfIndex === "number" ? data.shelfIndex : null,
           shelfPos:
             typeof data.shelfPos === "number" ? data.shelfPos : null,
         };
       });
-      handleBooks(books);
+
+      handleItems(items);
     },
     (error) => {
-      console.error("Error subscribing to books:", error);
+      console.error("Error subscribing to items:", error);
       if (handleError) handleError(error);
     }
   );
 }
 
-// Update shelf index and horizontal position on the shelf
+// ---------- POSITION / DELETE ----------
+
 export async function updateBookShelfPosition(
   userId,
-  bookId,
+  itemId,
   shelfIndex,
   shelfPos = null
 ) {
   const { booksColRef } = getDefaultShelfRefs(userId);
-  const bookRef = doc(booksColRef, bookId);
+  const itemRef = doc(booksColRef, itemId);
 
-  await updateDoc(bookRef, {
+  await updateDoc(itemRef, {
     shelfIndex,
     shelfPos: shelfIndex === null ? null : shelfPos,
     updatedAt: serverTimestamp(),
   });
 }
-export async function deleteBook(userId, bookId) {
-  const { booksColRef } = getDefaultShelfRefs(userId);
-  const bookRef = doc(booksColRef, bookId);
-  await deleteDoc(bookRef);
-}
-export async function resetAndSeedRandomBooks(userId) {
-  const { shelfRef, booksColRef } = getDefaultShelfRefs(userId);
 
-  // Clear existing books
+export async function deleteBook(userId, itemId) {
+  const { booksColRef } = getDefaultShelfRefs(userId);
+  const itemRef = doc(booksColRef, itemId);
+  await deleteDoc(itemRef);
+}
+
+// ---------- RESET / DEMO SEED ----------
+
+export async function resetAndSeedRandomBooks(userId) {
+  const { booksColRef } = getDefaultShelfRefs(userId);
+
+  // Clear existing
   const existing = await getDocs(booksColRef);
   const batch = writeBatch(db);
   existing.forEach((snap) => batch.delete(snap.ref));
@@ -194,6 +214,7 @@ export async function resetAndSeedRandomBooks(userId) {
     const ref = doc(booksColRef);
     batch.set(ref, {
       id: ref.id,
+      type: "book",
       title,
       label: title,
       authors: [],
@@ -201,7 +222,7 @@ export async function resetAndSeedRandomBooks(userId) {
       thumbnailUrl: null,
       pageCount: null,
       color: pickColorForVolumeId(title),
-      shelfIndex: null, // tray
+      shelfIndex: null,
       shelfPos: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -211,20 +232,22 @@ export async function resetAndSeedRandomBooks(userId) {
   await batch.commit();
 }
 
-// Generate a distinct-ish color for each volume based on its id/title
+// ---------- COLOR HELPER ----------
+
 function pickColorForVolumeId(volumeIdOrTitle) {
   const str = volumeIdOrTitle || "book";
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
   }
-  const hue = hash % 360; // 0–359
-  const saturation = 65; // %
-  const lightness = 52; // %
+  const hue = hash % 360;
+  const saturation = 65;
+  const lightness = 52;
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 
-// Add a book from a Google Books volume into the default shelf
+// ---------- ADD BOOK FROM GOOGLE ----------
+
 export async function addBookFromGoogleVolume(userId, volume) {
   if (!userId || !volume) return;
 
@@ -240,29 +263,60 @@ export async function addBookFromGoogleVolume(userId, volume) {
   const pageCount =
     typeof info.pageCount === "number" ? info.pageCount : null;
 
-// Label for the spine — use full title, wrapping will handle length
-const spineLabel = title;
-
+  const spineLabel = title;
   const color = pickColorForVolumeId(volume.id || title);
 
-  const bookRef = doc(booksColRef); // auto id
+  const bookRef = doc(booksColRef);
 
   await setDoc(bookRef, {
     id: bookRef.id,
+    type: "book",
     googleVolumeId: volume.id || null,
     title,
+    label: spineLabel,
     authors,
     thumbnailUrl: thumbnail,
     pageCount,
-    label: spineLabel,
     color,
-    shelfIndex: null, // start in tray
+    shelfIndex: null,
     shelfPos: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 
   return bookRef.id;
+}
+
+// ---------- ADD DECOR ----------
+
+export async function addDecorItem(userId, decorKind, variantIndex = 1) {
+  if (!userId) return;
+
+  const { booksColRef } = getDefaultShelfRefs(userId);
+  const ref = doc(booksColRef);
+
+  let label = "Decor";
+  if (decorKind === "plant") label = "Plant";
+  else if (decorKind === "candle") label = "Candle";
+  else if (decorKind === "bookend") label = "Bookends";
+
+  await setDoc(ref, {
+    id: ref.id,
+    type: "decor",
+    label,
+    title: label,
+    decorKind,
+    // IMPORTANT: store the variant as a number
+    decorVariant: Number.isFinite(variantIndex)
+      ? variantIndex
+      : 1,
+    shelfIndex: null,
+    shelfPos: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return ref.id;
 }
 
 export { auth, db };
