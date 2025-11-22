@@ -318,6 +318,8 @@ export default function HomePage() {
   const [showPlantOptions, setShowPlantOptions] = useState(false);
   const [showCandleOptions, setShowCandleOptions] = useState(false);
 
+  const currentYear = new Date().getFullYear();
+
   useEffect(() => {
     const unsubscribe = ensureAnonymousUser((user) => {
       setUserId(user.uid);
@@ -666,6 +668,7 @@ export default function HomePage() {
           position: "relative",
           zIndex: 1,
           minHeight: 0,
+          paddingBottom: "4.5rem", // extra space so content isn't hidden by fixed footer
         }}
       >
         <div
@@ -1637,6 +1640,101 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* Fixed footer with logo, copyright, and link */}
+      <footer
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: "3.5rem",
+          background:
+            "linear-gradient(to top, rgba(15,10,6,0.96), rgba(24,16,10,0.9))",
+          borderTop: "1px solid rgba(63,37,17,0.9)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "0 1.5rem",
+          zIndex: 30,
+          backdropFilter: "blur(10px)",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "1200px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "1rem",
+            fontSize: "0.8rem",
+            color: "#e4e4e7",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/cozy-logo.png"
+              alt="Cozy & Content logo"
+              style={{
+                height: "1.6rem",
+                width: "auto",
+                objectFit: "contain",
+              }}
+            />
+            <span
+              style={{
+                color: "#e5e7eb",
+              }}
+            >
+              Cozy & Content • Franklin, NC
+            </span>
+          </div>
+
+          <div
+            style={{
+              textAlign: "center",
+              flex: 1,
+              color: "#e5e7eb",
+            }}
+          >
+            © {currentYear} Cozy & Content. All rights reserved.
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
+          >
+            <a
+              href="https://cozyandcontentnc.com"
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                fontSize: "0.8rem",
+                color: "#fed7aa",
+                textDecoration: "none",
+                padding: "0.35rem 0.9rem",
+                borderRadius: "999px",
+                border: "1px solid rgba(248,148,60,0.9)",
+                backgroundColor: "rgba(24,16,10,0.96)",
+                boxShadow: "0 4px 10px rgba(0,0,0,0.45)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Visit our bookstore
+            </a>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }
