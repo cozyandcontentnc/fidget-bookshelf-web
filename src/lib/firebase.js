@@ -1,6 +1,7 @@
 // src/lib/firebase.js
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+console.log("[AppCheck] initialized");
 import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
   getFirestore,
