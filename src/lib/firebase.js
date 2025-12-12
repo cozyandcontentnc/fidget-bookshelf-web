@@ -1,5 +1,6 @@
 // src/lib/firebase.js
 import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
   getFirestore,
@@ -32,6 +33,20 @@ function createFirebaseApp() {
 }
 
 const app = createFirebaseApp();
+
+if (typeof window !== "undefined") {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(
+        process.env.NEXT_PUBLIC_RECAPTCHA_V3_SITE_KEY
+      ),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (e) {
+    // Ignore "already exists" in dev/hot reload situations
+  }
+}
+
 const auth = getAuth(app);
 const db = getFirestore(app);
 
