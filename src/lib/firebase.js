@@ -1,10 +1,6 @@
 // src/lib/firebase.js
 import { initializeApp, getApps, getApp } from "firebase/app";
-import {
-  getAuth,
-  onAuthStateChanged,
-  signInAnonymously,
-} from "firebase/auth";
+import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
   getFirestore,
   collection,
@@ -39,18 +35,42 @@ const app = createFirebaseApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ---------- USER DOC (ANCHOR) ----------
+
+async function ensureUserDoc(userId) {
+  const userRef = doc(db, "users", userId);
+  await setDoc(
+    userRef,
+    {
+      anon: true,
+      createdAt: serverTimestamp(),
+      lastSeenAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+  return userRef;
+}
+
 // ---------- AUTH ----------
 
 export function ensureAnonymousUser(callback) {
   const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      callback(user);
-    } else {
-      try {
-        await signInAnonymously(auth);
-      } catch (err) {
-        console.error("Error signing in anonymously:", err);
+    try {
+      let u = user;
+
+      if (!u) {
+        const cred = await signInAnonymously(auth);
+        u = cred.user;
       }
+
+      // STEP 2: ensure users/{uid} exists so Firestore doesn't show "doc does not exist"
+      if (u?.uid) {
+        await ensureUserDoc(u.uid);
+      }
+
+      if (u) callback(u);
+    } catch (err) {
+      console.error("Error ensuring anonymous user:", err);
     }
   });
 
@@ -60,6 +80,9 @@ export function ensureAnonymousUser(callback) {
 // ---------- SHELF REFS ----------
 
 export async function ensureDefaultShelf(userId) {
+  // Ensure parent exists (safe even if called elsewhere)
+  await ensureUserDoc(userId);
+
   const shelfRef = doc(db, "users", userId, "fidgetShelves", "default");
   const snap = await getDoc(shelfRef);
 
@@ -72,6 +95,9 @@ export async function ensureDefaultShelf(userId) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+  } else {
+    // Optional: touch updatedAt so you can sort/track activity
+    await updateDoc(shelfRef, { updatedAt: serverTimestamp() }).catch(() => {});
   }
 
   return shelfRef;
@@ -141,18 +167,14 @@ export function subscribeToBooks(userId, handleItems, handleError) {
           title: data.title || data.label || "Book",
           color: data.color || "#ffffff",
           thumbnailUrl: data.thumbnailUrl || null,
-          pageCount:
-            typeof data.pageCount === "number" ? data.pageCount : null,
+          pageCount: typeof data.pageCount === "number" ? data.pageCount : null,
 
           // decor fields
           decorKind: data.decorKind || null,
-          // don't over-filter here – just pass it through
           decorVariant: data.decorVariant ?? null,
 
-          shelfIndex:
-            typeof data.shelfIndex === "number" ? data.shelfIndex : null,
-          shelfPos:
-            typeof data.shelfPos === "number" ? data.shelfPos : null,
+          shelfIndex: typeof data.shelfIndex === "number" ? data.shelfIndex : null,
+          shelfPos: typeof data.shelfPos === "number" ? data.shelfPos : null,
         };
       });
 
@@ -167,12 +189,7 @@ export function subscribeToBooks(userId, handleItems, handleError) {
 
 // ---------- POSITION / DELETE ----------
 
-export async function updateBookShelfPosition(
-  userId,
-  itemId,
-  shelfIndex,
-  shelfPos = null
-) {
+export async function updateBookShelfPosition(userId, itemId, shelfIndex, shelfPos = null) {
   const { booksColRef } = getDefaultShelfRefs(userId);
   const itemRef = doc(booksColRef, itemId);
 
@@ -257,11 +274,8 @@ export async function addBookFromGoogleVolume(userId, volume) {
   const title = info.title || "Untitled";
   const authors = Array.isArray(info.authors) ? info.authors : [];
   const thumbnail =
-    info.imageLinks && info.imageLinks.thumbnail
-      ? info.imageLinks.thumbnail
-      : null;
-  const pageCount =
-    typeof info.pageCount === "number" ? info.pageCount : null;
+    info.imageLinks && info.imageLinks.thumbnail ? info.imageLinks.thumbnail : null;
+  const pageCount = typeof info.pageCount === "number" ? info.pageCount : null;
 
   const spineLabel = title;
   const color = pickColorForVolumeId(volume.id || title);
@@ -306,10 +320,7 @@ export async function addDecorItem(userId, decorKind, variantIndex = 1) {
     label,
     title: label,
     decorKind,
-    // IMPORTANT: store the variant as a number
-    decorVariant: Number.isFinite(variantIndex)
-      ? variantIndex
-      : 1,
+    decorVariant: Number.isFinite(variantIndex) ? variantIndex : 1,
     shelfIndex: null,
     shelfPos: null,
     createdAt: serverTimestamp(),
